@@ -1,18 +1,28 @@
+/**
+ * @file main.cpp
+ * @author N. AZZOUZ, A. MELLAH, R. ALOUI
+ * @brief 
+ * @version 0.1
+ * @date 2023-01-14
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
 #include <Arduino.h>
 
 #include <WiFi.h>
-#include <WiFiUdp.h>
+#include <WiFiUdp.h>  // Utilisation du protocole UDP (pour les applications temps réel)
 #include <PubSubClient.h>
 #include <NTPClient.h>
 
 
-#define WIFISSID "Ooredoo1F296B" // Enter WifiSSID here
-#define PASSWORD "C4ZG9P6XU$?42" // Enter password here
+#define WIFISSID "Redmi Note 11" // Enter WifiSSID here
+#define PASSWORD "isetbeja" // Enter password here
 #define TOKEN "BBFF-Hz6tdZJl9805kiV1KRrxKrXaEjIV24" // Ubidots' TOKEN
 #define MQTT_CLIENT_NAME "BBFF-Hz6tdZJl9805kiV1KRrxKrXaEjIV24" // MQTT client Name
-// Define Constants
 #define VARIABLE_LABEL "ecg_val" // ubidots variable label
 #define DEVICE_LABEL "AD8232_IASRIA" // ubidots device label
+#define T_SAMPLING 150 // Period of sampling (ms)
 
 
 #define SENSORPIN A0 // Set the A0 as SENSORPIN
@@ -64,7 +74,7 @@ void reconnect() {
 }
 
 /****************************************
-   Main Functions
+   setup function
  ****************************************/
 void setup() {
   Serial.begin(115200);
@@ -75,7 +85,7 @@ void setup() {
   Serial.println();
   Serial.print("Waiting for WiFi...");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) { // Try to connect to network
     Serial.print(".");
     delay(500);
   }
@@ -85,7 +95,7 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   timeClient.begin();
-  client.setServer(mqttBroker, 1883);
+  client.setServer(mqttBroker, 1883); // Try to connect to MQTT server
   client.setCallback(callback);
   timeClient.update();
   epochseconds = timeClient.getEpochTime();
@@ -97,13 +107,16 @@ void setup() {
   Serial.println(current_millis);
 }
 
+/****************************************
+   setup function
+ ****************************************/
 void loop() {
   if (!client.connected()) {
     reconnect();
     j = 0;
   }
-  //sprintf(payload, "%s", "{\"ECG_Sensor_data\": [{\"value\":1234, \"timestamp\": 1595972075},{\"value\":1111, \"timestamp\": 1595971075},{\"value\":2222, \"timestamp\": 1595970075}]}");
-  j = j + 1;
+  
+  j = j + 1;  // Messages sent
   Serial.print("j=");
   Serial.println(j);
   sprintf(topic, "%s%s", "/v1.6/devices/", DEVICE_LABEL);
@@ -111,7 +124,7 @@ void loop() {
   sprintf(payload, "{\"%s\": [", VARIABLE_LABEL); // Adds the variable label
   for (int i = 1; i <= 3; i++)
   {
-    float sensor = analogRead(SENSORPIN);
+    float sensor = analogRead(SENSORPIN); // Read from sensor
     dtostrf(sensor, 4, 2, str_sensor);
     sprintf(payload, "%s{\"value\":", payload); // Adds the value
     sprintf(payload, "%s %s,", payload, str_sensor); // Adds the value
@@ -119,19 +132,17 @@ void loop() {
     timestampp = epochmilliseconds + (current_millis_at_sensordata - current_millis);
     dtostrf(timestampp, 10, 0, str_millis);
     sprintf(payload, "%s \"timestamp\": %s},", payload, str_millis); // Adds the value
-    delay(150);
+    delay(T_SAMPLING);
   }
 
-  float sensor = analogRead(SENSORPIN);
+  float sensor = analogRead(SENSORPIN); // Read from sensor
   dtostrf(sensor, 4, 2, str_sensor);
   current_millis_at_sensordata = millis();
   timestampp = epochmilliseconds + (current_millis_at_sensordata - current_millis);
   dtostrf(timestampp, 10, 0, str_millis);
   sprintf(payload, "%s{\"value\":%s, \"timestamp\": %s}]}", payload, str_sensor, str_millis);
   Serial.println("Publishing data to Ubidots Cloud");
-  client.publish(topic, payload);
+  client.publish(topic, payload); // Publish data to ubidots.com
   Serial.println(payload);
-  // client.loop();
-
-
+  delay(T_SAMPLING);
 }
